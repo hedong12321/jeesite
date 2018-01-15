@@ -34,7 +34,8 @@
 		<input type="hidden" id="a" name="a" value="${not empty t?t:'0'}"/>
 		<div class="sel">
 			<a href="javascript:" onclick="$('#t').val('article');$('.sel a').removeClass('act');$(this).addClass('act')" class="${empty t || t eq 'article'?'act':''}">文章搜索</a> &nbsp;
-			<a href="javascript:" onclick="$('#t').val('guestbook');$('.sel a').removeClass('act');$(this).addClass('act')" class="${t eq 'guestbook'?'act':''}">留言搜索</a>
+			<a href="javascript:" onclick="$('#t').val('guestbook');$('.sel a').removeClass('act');$(this).addClass('act')" class="${t eq 'guestbook'?'act':''}">留言搜索</a> &nbsp;
+			<a href="javascript:" onclick="reindex();">更新索引</a>
 		</div>
 		<c:choose>
 			<c:when test="${param.a eq '1'}">
@@ -94,6 +95,12 @@
 			$("#searchForm").submit();
 	    	return false;
 	    }
+
+	    function reindex() {
+            $.get('${ctx}/search/reindex', function (resp) {
+                alert(resp);
+            }, "text");
+        }
 	</script>
 </body>
 </html>

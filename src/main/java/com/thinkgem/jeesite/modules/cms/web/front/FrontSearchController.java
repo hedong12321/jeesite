@@ -24,6 +24,9 @@ import com.thinkgem.jeesite.modules.cms.service.GuestbookService;
 import com.thinkgem.jeesite.modules.cms.utils.CmsUtils;
 import com.thinkgem.jeesite.modules.sys.utils.UserUtils;
 
+import java.io.IOException;
+import java.io.PrintWriter;
+
 /**
  * 网站搜索Controller
  * @author ThinkGem
@@ -98,5 +101,23 @@ public class FrontSearchController extends BaseController{
 		model.addAttribute("cid", cid);// 搜索类型
 		return "modules/cms/front/themes/"+site.getTheme()+"/frontSearch";
 	}
-	
+
+	@RequestMapping(value = "/reindex")
+	public void reindex(HttpServletResponse response) {
+
+		articleService.createIndex();
+		guestbookService.createIndex();
+
+		PrintWriter writer = null;
+		try {
+			writer = response.getWriter();
+			writer.print("success!");
+		} catch (IOException e) {
+			e.printStackTrace();
+		} finally {
+			if (writer != null) {
+				writer.close();
+			}
+		}
+	}
 }
