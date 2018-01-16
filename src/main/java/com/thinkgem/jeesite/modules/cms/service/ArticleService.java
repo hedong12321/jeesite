@@ -3,12 +3,23 @@
  */
 package com.thinkgem.jeesite.modules.cms.service;
 
+import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.lang3.time.DateUtils;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.FieldType;
+import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.IndexOptions;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +37,7 @@ import com.thinkgem.jeesite.modules.cms.entity.Article;
 import com.thinkgem.jeesite.modules.cms.entity.ArticleData;
 import com.thinkgem.jeesite.modules.cms.entity.Category;
 import com.thinkgem.jeesite.modules.sys.utils.UserUtils;
+import org.springframework.util.CollectionUtils;
 
 /**
  * 文章Service
@@ -154,6 +166,47 @@ public class ArticleService extends CrudService<ArticleDao, Article> {
 	 */
 	public void createIndex(){
 		//dao.createIndex();
+
+        // 查询所有文章，创建索引
+		List<Article> allArticle = dao.findAllList(new Article());
+		if (!CollectionUtils.isEmpty(allArticle)) {
+		    try {
+                Directory directory = FSDirectory.open(Paths.get("lucene_index_repository"));
+
+                IndexWriterConfig config = new IndexWriterConfig();
+                config.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
+
+                IndexWriter writer = new IndexWriter(directory, config);
+
+                FieldType storeOnly = new FieldType();
+                storeOnly.setIndexOptions(IndexOptions.NONE); // 是否索引
+                storeOnly.setStored(true); // 是否存储
+                storeOnly.setTokenized(false); // 是否分词
+
+                Document doc = null;
+                for (Article article: allArticle) {
+                    doc = new Document();
+                    doc.add(new Field("title", article.getTitle(), TextField.TYPE_STORED));
+                    doc.add(new Field("keywords", article.getKeywords(), TextField.TYPE_STORED));
+                    doc.add(new Field("description", StringUtils.isNotEmpty(article.getDescription()) ? article.getDescription() : "", TextField.TYPE_STORED));
+                    doc.add(new Field("articleData.content",
+                            (article.getArticleData() != null && StringUtils.isNotEmpty(article.getArticleData().getContent())) ? article.getArticleData().getContent() : "", TextField.TYPE_STORED));
+
+                    doc.add(new Field("delFlag", article.getDelFlag(), storeOnly));
+                    doc.add(new Field("category.ids", article.getCategory().getIds(), storeOnly));
+                    doc.add(new Field("updateDate", com.thinkgem.jeesite.common.utils.DateUtils.formatDate(article.getUpdateDate(), "yyyy-MM-dd"), storeOnly));
+                    doc.add(new Field("id", article.getId(), storeOnly));
+
+                    writer.addDocument(doc);
+                }
+
+                writer.commit();
+                writer.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+		}
 	}
 	
 	/**
