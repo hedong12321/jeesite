@@ -15,9 +15,8 @@ import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.TextField;
-import org.apache.lucene.index.IndexOptions;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.*;
+import org.apache.lucene.search.*;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +37,7 @@ import com.thinkgem.jeesite.modules.cms.entity.ArticleData;
 import com.thinkgem.jeesite.modules.cms.entity.Category;
 import com.thinkgem.jeesite.modules.sys.utils.UserUtils;
 import org.springframework.util.CollectionUtils;
+import org.wltea.analyzer.lucene.IKAnalyzer;
 
 /**
  * 文章Service
@@ -173,7 +173,7 @@ public class ArticleService extends CrudService<ArticleDao, Article> {
 		    try {
                 Directory directory = FSDirectory.open(Paths.get("lucene_index_repository"));
 
-                IndexWriterConfig config = new IndexWriterConfig();
+                IndexWriterConfig config = new IndexWriterConfig(new IKAnalyzer());
                 config.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
 
                 IndexWriter writer = new IndexWriter(directory, config);
@@ -189,8 +189,10 @@ public class ArticleService extends CrudService<ArticleDao, Article> {
                     doc.add(new Field("title", article.getTitle(), TextField.TYPE_STORED));
                     doc.add(new Field("keywords", article.getKeywords(), TextField.TYPE_STORED));
                     doc.add(new Field("description", StringUtils.isNotEmpty(article.getDescription()) ? article.getDescription() : "", TextField.TYPE_STORED));
+
+					ArticleData articleData = articleDataDao.get(article.getId());
                     doc.add(new Field("articleData.content",
-                            (article.getArticleData() != null && StringUtils.isNotEmpty(article.getArticleData().getContent())) ? article.getArticleData().getContent() : "", TextField.TYPE_STORED));
+                            (articleData != null && StringUtils.isNotEmpty(articleData.getContent())) ? articleData.getContent() : "", TextField.TYPE_STORED));
 
                     doc.add(new Field("delFlag", article.getDelFlag(), storeOnly));
                     doc.add(new Field("category.ids", article.getCategory().getIds(), storeOnly));
@@ -243,7 +245,73 @@ public class ArticleService extends CrudService<ArticleDao, Article> {
 		// 关键字高亮
 		//dao.keywordsHighlight(query, page.getList(), 30, "title");
 		//dao.keywordsHighlight(query, page.getList(), 130, "description","articleData.content");
-		
+
+        try {
+            Directory directory = FSDirectory.open(Paths.get("lucene_index_repository"));
+            IndexReader reader = DirectoryReader.open(directory);
+            IndexSearcher searcher = new IndexSearcher(reader);
+
+            BooleanQuery query = new BooleanQuery.Builder().setMinimumNumberShouldMatch(1)
+                    .add(new BooleanClause(new TermQuery(new Term("title", q)), BooleanClause.Occur.SHOULD))
+                    .add(new BooleanClause(new TermQuery(new Term("keywords", q)), BooleanClause.Occur.SHOULD))
+                    .add(new BooleanClause(new TermQuery(new Term("description", q)), BooleanClause.Occur.SHOULD))
+                    .add(new BooleanClause(new TermQuery(new Term("articleData.content", q)), BooleanClause.Occur.SHOULD))
+                    .build();
+
+            /*
+            BooleanQuery.Builder filterBuilder = new BooleanQuery.Builder()
+                    .add(new BooleanClause(new TermQuery(new Term("delFlag", Article.DEL_FLAG_NORMAL)), BooleanClause.Occur.MUST));
+
+            if (StringUtils.isNotBlank(categoryId)){
+                filterBuilder.add(new BooleanClause(new TermQuery(new Term("category.ids", categoryId)), BooleanClause.Occur.MUST));
+		    }
+
+            if (StringUtils.isNotBlank(beginDate) && StringUtils.isNotBlank(endDate)) {
+                filterBuilder.add(new BooleanClause(TermRangeQuery.newStringRange("updateDate", beginDate.replaceAll("-", ""),
+					endDate.replaceAll("-", ""), true, true), BooleanClause.Occur.MUST));
+		    }
+
+            BooleanQuery filter = filterBuilder.build();
+            */
+
+            Sort sort = new Sort(new SortField("updateDate", SortField.Type.DOC, true));
+
+            TopFieldCollector collector = TopFieldCollector.create(sort, page.getPageSize(), false, false, false, false);
+
+            searcher.search(query, collector);
+
+            TopDocs docs = collector.topDocs((page.getPageNo() -1) * page.getPageSize(), page.getPageNo() * page.getPageSize() - 1);
+            if (docs != null && docs.totalHits > 0) {
+                page.setCount(docs.totalHits);
+
+                List<Article> articles = new ArrayList<>();
+                Article article = null;
+                ArticleData articleData = null;
+                for (ScoreDoc scoreDoc : docs.scoreDocs) {
+                    int docId = scoreDoc.doc;//文档编号
+                    Document document = searcher.doc(docId);
+                    article = new Article();
+                    articleData = new ArticleData();
+                    article.setId(document.get("id"));
+                    article.setTitle(document.get("title"));
+                    article.setKeywords(document.get("keywords"));
+                    article.setDescription(document.get("description"));
+
+                    articleData.setId(document.get("id"));
+                    articleData.setContent(document.get("articleData.content"));
+
+                    article.setArticleData(articleData);
+
+                    articles.add(article);
+                }
+
+                page.setList(articles);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
 		return page;
 	}
 	
