@@ -16,6 +16,7 @@ import com.google.common.collect.Sets;
 import com.thinkgem.jeesite.common.config.Global;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisCluster;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.exceptions.JedisException;
 
@@ -30,6 +31,7 @@ public class JedisUtils {
 	private static Logger logger = LoggerFactory.getLogger(JedisUtils.class);
 	
 	private static JedisPool jedisPool = SpringContextHolder.getBean(JedisPool.class);
+	private static JedisCluster jedisCluster = SpringContextHolder.getBean(JedisCluster.class);
 
 	public static final String KEY_PREFIX = Global.getConfig("redis.keyPrefix");
 	
